@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Allows access to the Tomcat Manager from any IP (suitable for local Docker dev).
+  RESTRICT THIS IN PRODUCTION environments.
+-->
+<Context privileged="true" antiResourceLocking="false"
+         docBase="${catalina.home}/webapps/manager">
+  <Valve className="org.apache.catalina.valves.RemoteAddrValve"
+         allow="127\.0\.0\.1|::1|0:0:0:0:0:0:0:1|.*" />
+</Context>

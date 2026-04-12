@@ -1,0 +1,131 @@
+# =============================================================================
+# SailPoint IdentityIQ - Docker Compose Stack
+# All configuration is driven from the .env file — do not hardcode values here.
+# Services: MySQL | Tomcat + IIQ | phpMyAdmin
+# =============================================================================
+# IMPORTANT: Before running, place your identityiq-<version>.zip file in the
+# ./iiq-build/src/ directory. Download from https://compass.sailpoint.com
+# =============================================================================
+
+version: "3.9"
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL Database
+  # Port on host: ${MYSQL_PORT}  (mapped to internal 3306)
+  # ---------------------------------------------------------------------------
+  db:
+    image: mysql:${MYSQL_VERSION}
+    container_name: iiq-mysql
+    platform: linux/x86_64
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "${MYSQL_PORT}:3306"
+    volumes:
+      - iiq-mysql-data:/var/lib/mysql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - iiq-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # phpMyAdmin - Web-based MySQL administration
+  # Access: http://localhost:${PHPMYADMIN_PORT}
+  # ---------------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin:${PHPMYADMIN_VERSION}
+    container_name: iiq-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT}:80"
+    environment:
+      PMA_HOST: iiq-mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - iiq-network
+
+  # ---------------------------------------------------------------------------
+  # Tomcat + SailPoint IdentityIQ ${IIQ_VERSION}
+  # Access: http://localhost:${TOMCAT_PORT}/identityiq
+  # Default credentials: spadmin / admin
+  # ---------------------------------------------------------------------------
+  iiq:
+    build:
+      context: ./iiq-build
+      args:
+        IIQ_VERSION: ${IIQ_VERSION}
+        TOMCAT_VERSION: ${TOMCAT_VERSION}
+    container_name: iiq-tomcat
+    restart: unless-stopped
+    ports:
+      - "${TOMCAT_PORT}:8080"
+      - "${TOMCAT_DEBUG_PORT}:8000"
+    environment:
+      MYSQL_HOST: iiq-mysql
+      # MYSQL_PORT here is the internal container port (always 3306).
+      # ${MYSQL_PORT} in .env is the HOST-side port mapping — keep these separate.
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      IIQ_VERSION: ${IIQ_VERSION}
+      TOMCAT_PORT: ${TOMCAT_PORT}
+      JAVA_OPTS: >-
+        -Xms512m
+        -Xmx2048m
+        -XX:MaxPermSize=512m
+        -Dfile.encoding=UTF-8
+        -Djava.awt.headless=true
+    volumes:
+      - iiq-webapps:/usr/local/tomcat/webapps
+      - iiq-fileshare:/FILE_SHARE
+      - iiq-logs:/usr/local/tomcat/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - iiq-network
+    # Healthcheck uses the internal container port (8080), not the host mapping
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/identityiq/login.jsf"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 120s
+
+# =============================================================================
+# Named Volumes (persistent data survives container restarts)
+# =============================================================================
+volumes:
+  iiq-mysql-data:
+    name: iiq-mysql-data
+  iiq-webapps:
+    name: iiq-webapps
+  iiq-fileshare:
+    name: iiq-fileshare
+  iiq-logs:
+    name: iiq-logs
+
+# =============================================================================
+# Network
+# =============================================================================
+networks:
+  iiq-network:
+    name: iiq-network
+    driver: bridge

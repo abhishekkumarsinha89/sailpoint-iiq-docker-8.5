@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Tomcat Users Configuration
+  Grants access to the Tomcat Manager UI at http://localhost:8080/manager/html
+  CHANGE THESE CREDENTIALS IN PRODUCTION!
+-->
+<tomcat-users xmlns="http://tomcat.apache.org/xml"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://tomcat.apache.org/xml tomcat-users.xsd"
+              version="1.0">
+  <role rolename="manager-gui"/>
+  <role rolename="manager-script"/>
+  <role rolename="admin-gui"/>
+  <user username="admin"
+        password="admin"
+        roles="manager-gui,manager-script,admin-gui"/>
+</tomcat-users>
